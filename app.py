@@ -258,4 +258,4 @@ if __name__ == "__main__":
     print("🚀 𝐒𝐞𝐫𝐯𝐞𝐫: http://localhost:5000")
     print("📤 𝐅𝐨𝐫𝐰𝐚𝐫𝐝𝐢𝐧𝐠 𝐭𝐨 𝐓𝐞𝐥𝐞𝐠𝐫𝐚𝐦")
     print("=" * 60)
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=8080)
