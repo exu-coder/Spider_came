@@ -15,7 +15,7 @@ CORS(app)
 
 # ─── TELEGRAM CONFIG ────────────────────────────────────────────
 # ⚠️ REPLACE WITH YOUR ACTUAL CREDENTIALS
-BOT_TOKEN = "8858703154:AAEqtnTbTF3nQntumjT8TR-KWVrYdHo7xFg"
+BOT_TOKEN = "8858703154:AAFnONjnnu6KDLdfNCZPRvDsz5B8KUMcaXs"
 CHAT_ID = "8379062893"
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
