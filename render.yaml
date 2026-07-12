@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: deep-sea-php
+    runtime: php
+    buildCommand: |
+      apt-get update && apt-get install -y php-curl php-json php-mbstring php-fileinfo
+    startCommand: php -S 0.0.0.0:10000
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHAT_ID
+        sync: false
